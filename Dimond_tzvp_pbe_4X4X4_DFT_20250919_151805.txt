@@ -1,11 +1,5 @@
 11.344262899408
 #INFO: **** input file is /Users/phungngocduy/Documents/1_De_tai_KOBMP2/khanh/NguyenBan_khongchinh_he/DFT_nguyenban/dft_dimond_he.py ****
-import pyscf.pbc.tools.pyscf_ase as pyscf_ase
-import pyscf.pbc.gto as pbcgto
-import pyscf.pbc.dft as pbcdft
-import pandas as pd  # Thêm thư viện pandas
-import numpy
-import sys  # Xuất file log
 
 import os
 from ase.build import bulk
@@ -23,6 +17,7 @@ class Tee:
         self.file.write(data)
 
     def flush(self):
+    hello
         self.stdout.flush()
         self.file.flush()
 
