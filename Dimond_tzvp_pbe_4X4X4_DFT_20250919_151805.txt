@@ -17,16 +17,7 @@ npoints1 = 110
 
 # Generate a unique filename using the current timestamp
 output_filename = f"Dimond_tzvp_pbe_{kpointx}X{kpointy}X{kpointz}_DFT_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-
-# Initialize Tee to write to both terminal and file
-sys.stdout = Tee(output_filename)
-
-# c = bulk('Si', 'diamond', a=5.431) # Tương tự
-#c = bulk('Ge', 'diamond', a=5.658)
-c = bulk('C', 'diamond', a=3.5668)
-print(c.get_volume())
-
-cell = pbcgto.Cell()
+cgto.Cell()
 cell.atom = pyscf_ase.ase_atoms_to_pyscf(c)
 cell.a = c.cell
 
