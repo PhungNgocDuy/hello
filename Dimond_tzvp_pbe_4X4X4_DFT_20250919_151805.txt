@@ -1,0 +1,284 @@
+11.344262899408
+#INFO: **** input file is /Users/phungngocduy/Documents/1_De_tai_KOBMP2/khanh/NguyenBan_khongchinh_he/DFT_nguyenban/dft_dimond_he.py ****
+import pyscf.pbc.tools.pyscf_ase as pyscf_ase
+import pyscf.pbc.gto as pbcgto
+import pyscf.pbc.dft as pbcdft
+import pandas as pd  # Thêm thư viện pandas
+import numpy
+import sys  # Xuất file log
+
+import os
+from ase.build import bulk
+from ase.dft.kpoints import sc_special_points as special_points, get_bandpath
+import datetime
+
+
+class Tee:
+    def __init__(self, filename):
+        self.file = open(filename, "w")
+        self.stdout = sys.stdout
+
+    def write(self, data):
+        self.stdout.write(data)
+        self.file.write(data)
+
+    def flush(self):
+        self.stdout.flush()
+        self.file.flush()
+
+
+kpointx = 4
+kpointy = 4
+kpointz = 4
+
+npoints1 = 110
+
+# Generate a unique filename using the current timestamp
+output_filename = f"Dimond_tzvp_pbe_{kpointx}X{kpointy}X{kpointz}_DFT_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+
+# Initialize Tee to write to both terminal and file
+sys.stdout = Tee(output_filename)
+
+# c = bulk('Si', 'diamond', a=5.431) # Tương tự
+#c = bulk('Ge', 'diamond', a=5.658)
+c = bulk('C', 'diamond', a=3.5668)
+print(c.get_volume())
+
+cell = pbcgto.Cell()
+cell.atom = pyscf_ase.ase_atoms_to_pyscf(c)
+cell.a = c.cell
+
+cell.basis = 'gth-tzvp'
+cell.pseudo = 'gth-pbe'
+cell.verbose = 5
+# cell.exp_to_discard = 0.1  # Loại bỏ các hàm cơ sở có exponent < 0.1, tránh tràn số (Chỗ đã chỉnh sửa)
+#cell.a = numpy.array(cell.a).tolist()
+#cell.build(None, None)
+#cell.precision = 1e-14
+#cell.rcut = 35.88
+cell.build()
+
+points = special_points['fcc']
+G = points['G']
+X = points['X']
+W = points['W']
+K = points['K']
+L = points['L']
+band_kpts, kpath, sp_points = get_bandpath([L, G, X, W, K, G], c.cell, npoints=npoints1)
+band_kpts = cell.get_abs_kpts(band_kpts)
+
+#
+# band structure from Gamma point sampling
+#
+"""
+mf = pbcdft.RKS(cell)
+print(mf.kernel())
+
+e_kn = mf.get_bands(band_kpts)[0]
+vbmax = -99
+for en in e_kn:
+    vb_k = en[cell.nelectron // 2 - 1]
+    if vb_k > vbmax:
+        vbmax = vb_k
+e_kn = [en - vbmax for en in e_kn]
+"""
+#
+# band structure from 222 k-point sampling
+#
+
+kmf = pbcdft.KRKS(cell, cell.make_kpts([kpointx, kpointy, kpointz]))
+print(kmf.kernel())
+
+e_kn_2 = kmf.get_bands(band_kpts)[0]
+vbmax = -99
+for en in e_kn_2:
+    vb_k = en[cell.nelectron // 2 - 1]
+    if vb_k > vbmax:
+        vbmax = vb_k
+e_kn_2 = [en - vbmax for en in e_kn_2]
+
+au2ev = 27.21139  # Hệ số chuyển đổi Hartree → eV
+
+# Tạo DataFrame chứa kết quả
+nbands = cell.nao_nr()
+band_data = []
+
+# Thu thập dữ liệu cho từng k-point
+for i, k in enumerate(kpath):
+    row = {'kpath': k}
+    for band_idx in range(nbands):
+        #row[f'band_{band_idx}_gamma'] = e_kn[i][band_idx] * au2ev
+        row[f'band_{band_idx}_222'] = e_kn_2[i][band_idx] * au2ev
+    band_data.append(row)
+
+# Tạo DataFrame từ dữ liệu
+df_bands = pd.DataFrame(band_data)
+
+# Tạo DataFrame cho các điểm đặc biệt
+df_special_points = pd.DataFrame({
+    'label': ['L', 'Gamma', 'X', 'W', 'K', 'Gamma'],
+    'position': sp_points
+})
+
+# Lưu kết quả vào file Excel
+timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+filename = os.path.join(os.getcwd(), f"Dimond_tzvp_pbe_{kpointx}x{kpointy}x{kpointz}_DFT_{timestamp}.xlsx")
+with pd.ExcelWriter(filename) as writer:
+    df_bands.to_excel(writer, sheet_name='Band Energies', index=False)
+    df_special_points.to_excel(writer, sheet_name='Special Points', index=False)
+
+print(f"Kết quả đã được lưu vào file {filename}")#INFO: ******************** input file end ********************
+
+
+System: uname_result(system='Darwin', node='MacBook-Pro-cua-Phung.local', release='25.0.0', version='Darwin Kernel Version 25.0.0: Mon Aug 25 21:17:45 PDT 2025; root:xnu-12377.1.9~3/RELEASE_ARM64_T8103', machine='arm64')  Threads 1
+Python 3.11.8 | packaged by conda-forge | (main, Feb 16 2024, 20:49:36) [Clang 16.0.6 ]
+numpy 1.26.4  scipy 1.11.4  h5py 3.9.0
+Date: Fri Sep 19 15:18:05 2025
+PySCF version 2.7.0
+PySCF path  /opt/anaconda3/lib/python3.11/site-packages/pyscf
+
+[CONFIG] conf_file None
+[INPUT] verbose = 5
+[INPUT] max_memory = 4000 
+[INPUT] num. atoms = 2
+[INPUT] num. electrons = 8
+[INPUT] charge = 0
+[INPUT] spin (= nelec alpha-beta = 2S) = 0
+[INPUT] symmetry False subgroup None
+[INPUT] Mole.unit = angstrom
+[INPUT] Symbol           X                Y                Z      unit          X                Y                Z       unit  Magmom
+[INPUT]  1 C      0.000000000000   0.000000000000   0.000000000000 AA    0.000000000000   0.000000000000   0.000000000000 Bohr   0.0
+[INPUT]  2 C      0.891700000000   0.891700000000   0.891700000000 AA    1.685068785275   1.685068785275   1.685068785275 Bohr   0.0
+[INPUT] ---------------- BASIS SET ---------------- 
+[INPUT] l, kappa, [nprim/nctr], expnt,             c_1 c_2 ...
+[INPUT] C
+[INPUT] 0    0    [5    /3   ]  5.3685662937      0.0974901974    0    0
+                                1.9830691554      0.1041996677    0    0
+                                0.6978346167      -0.3645093878    0    0
+                                0.2430968816      -0.6336931464    1    0
+                                0.0812865018      -0.1676727564    0    1
+[INPUT] 1    0    [5    /3   ]  5.3685662937      -0.0510969367    0    0
+                                1.9830691554      -0.1693035193    0    0
+                                0.6978346167      -0.357993393    0    0
+                                0.2430968816      -0.4327616531    1    0
+                                0.0812865018      -0.2457672757    0    1
+[INPUT] 2    0    [1    /1   ]  0.55                 1
+
+Ewald components = 1.03801047765584, -14.3374600154978, 0.51232039221771
+nuclear repulsion = -12.7871291456242
+number of shells = 6
+number of NR pGTOs = 50
+number of NR cGTOs = 34
+basis = gth-tzvp
+ecp = {}
+CPU time:         2.70
+lattice vectors  a1 [0.000000000, 3.370137571, 3.370137571]
+                 a2 [3.370137571, 0.000000000, 3.370137571]
+                 a3 [3.370137571, 3.370137571, 0.000000000]
+dimension = 3
+low_dim_ft_type = None
+Cell volume = 76.5549
+rcut = 26.46645368697346 (nimgs = [7 7 7])
+lattice sum = 2135 cells
+precision = 1e-08
+pseudo = gth-pbe
+ke_cutoff = 502.106041190294
+    = [51 51 51] mesh (132651 PWs)
+
+
+******** <class 'pyscf.pbc.dft.krks.KRKS'> ********
+method = KRKS
+initial guess = minao
+damping factor = 0
+level_shift factor = 0
+DIIS = <class 'pyscf.scf.diis.CDIIS'>
+diis_start_cycle = 1
+diis_space = 8
+diis_damp = 0
+SCF conv_tol = 1e-07
+SCF conv_tol_grad = None
+SCF max_cycles = 50
+direct_scf = True
+direct_scf_tol = 1e-13
+chkfile to save SCF result = /var/folders/6s/wvr4jbnj67583gh8hszcx5bh0000gn/T/tmpbsh5l88z
+max_memory 4000 MB (current use 0 MB)
+
+
+******** PBC SCF flags ********
+N kpts = 64
+kpts = [[ 0.00000000e+00  0.00000000e+00  0.00000000e+00]
+ [ 2.33046321e-01  2.33046321e-01 -2.33046321e-01]
+ [ 4.66092643e-01  4.66092643e-01 -4.66092643e-01]
+ [ 6.99138964e-01  6.99138964e-01 -6.99138964e-01]
+ [ 2.33046321e-01 -2.33046321e-01  2.33046321e-01]
+ [ 4.66092643e-01  0.00000000e+00  0.00000000e+00]
+ [ 6.99138964e-01  2.33046321e-01 -2.33046321e-01]
+ [ 9.32185286e-01  4.66092643e-01 -4.66092643e-01]
+ [ 4.66092643e-01 -4.66092643e-01  4.66092643e-01]
+ [ 6.99138964e-01 -2.33046321e-01  2.33046321e-01]
+ [ 9.32185286e-01  0.00000000e+00  0.00000000e+00]
+ [ 1.16523161e+00  2.33046321e-01 -2.33046321e-01]
+ [ 6.99138964e-01 -6.99138964e-01  6.99138964e-01]
+ [ 9.32185286e-01 -4.66092643e-01  4.66092643e-01]
+ [ 1.16523161e+00 -2.33046321e-01  2.33046321e-01]
+ [ 1.39827793e+00 -5.55111512e-17  5.55111512e-17]
+ [-2.33046321e-01  2.33046321e-01  2.33046321e-01]
+ [ 0.00000000e+00  4.66092643e-01  0.00000000e+00]
+ [ 2.33046321e-01  6.99138964e-01 -2.33046321e-01]
+ [ 4.66092643e-01  9.32185286e-01 -4.66092643e-01]
+ [ 0.00000000e+00  0.00000000e+00  4.66092643e-01]
+ [ 2.33046321e-01  2.33046321e-01  2.33046321e-01]
+ [ 4.66092643e-01  4.66092643e-01  0.00000000e+00]
+ [ 6.99138964e-01  6.99138964e-01 -2.33046321e-01]
+ [ 2.33046321e-01 -2.33046321e-01  6.99138964e-01]
+ [ 4.66092643e-01  0.00000000e+00  4.66092643e-01]
+ [ 6.99138964e-01  2.33046321e-01  2.33046321e-01]
+ [ 9.32185286e-01  4.66092643e-01  5.55111512e-17]
+ [ 4.66092643e-01 -4.66092643e-01  9.32185286e-01]
+ [ 6.99138964e-01 -2.33046321e-01  6.99138964e-01]
+ [ 9.32185286e-01  0.00000000e+00  4.66092643e-01]
+ [ 1.16523161e+00  2.33046321e-01  2.33046321e-01]
+ [-4.66092643e-01  4.66092643e-01  4.66092643e-01]
+ [-2.33046321e-01  6.99138964e-01  2.33046321e-01]
+ [ 0.00000000e+00  9.32185286e-01  0.00000000e+00]
+ [ 2.33046321e-01  1.16523161e+00 -2.33046321e-01]
+ [-2.33046321e-01  2.33046321e-01  6.99138964e-01]
+ [ 0.00000000e+00  4.66092643e-01  4.66092643e-01]
+ [ 2.33046321e-01  6.99138964e-01  2.33046321e-01]
+ [ 4.66092643e-01  9.32185286e-01  5.55111512e-17]
+ [ 0.00000000e+00  0.00000000e+00  9.32185286e-01]
+ [ 2.33046321e-01  2.33046321e-01  6.99138964e-01]
+ [ 4.66092643e-01  4.66092643e-01  4.66092643e-01]
+ [ 6.99138964e-01  6.99138964e-01  2.33046321e-01]
+ [ 2.33046321e-01 -2.33046321e-01  1.16523161e+00]
+ [ 4.66092643e-01  0.00000000e+00  9.32185286e-01]
+ [ 6.99138964e-01  2.33046321e-01  6.99138964e-01]
+ [ 9.32185286e-01  4.66092643e-01  4.66092643e-01]
+ [-6.99138964e-01  6.99138964e-01  6.99138964e-01]
+ [-4.66092643e-01  9.32185286e-01  4.66092643e-01]
+ [-2.33046321e-01  1.16523161e+00  2.33046321e-01]
+ [-5.55111512e-17  1.39827793e+00  5.55111512e-17]
+ [-4.66092643e-01  4.66092643e-01  9.32185286e-01]
+ [-2.33046321e-01  6.99138964e-01  6.99138964e-01]
+ [-5.55111512e-17  9.32185286e-01  4.66092643e-01]
+ [ 2.33046321e-01  1.16523161e+00  2.33046321e-01]
+ [-2.33046321e-01  2.33046321e-01  1.16523161e+00]
+ [-5.55111512e-17  4.66092643e-01  9.32185286e-01]
+ [ 2.33046321e-01  6.99138964e-01  6.99138964e-01]
+ [ 4.66092643e-01  9.32185286e-01  4.66092643e-01]
+ [-5.55111512e-17  5.55111512e-17  1.39827793e+00]
+ [ 2.33046321e-01  2.33046321e-01  1.16523161e+00]
+ [ 4.66092643e-01  4.66092643e-01  9.32185286e-01]
+ [ 6.99138964e-01  6.99138964e-01  6.99138964e-01]]
+Exchange divergence treatment (exxdiv) = ewald
+Ewald components = 1.91010858017955e-11, -0.142344034861904, 0.0573166810231177
+    madelung (= occupied orbital energy shift) = 0.17005470763936958
+    Total energy shift due to Ewald probe charge = -1/2 * Nelec*madelung = -0.680218830557
+DF object = <pyscf.pbc.df.fft.FFTDF object at 0x139115750>
+XC functionals = LDA,VWN
+small_rho_cutoff = 1e-07
+Uniform grid, mesh = [51 51 51]
+
+WARN: Singularity detected in overlap matrix (condition number = 9.82e+10). SCF may be inaccurate and hard to converge.
+
+Set gradient conv threshold to 0.000316228
